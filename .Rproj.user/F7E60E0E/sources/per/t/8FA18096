@@ -1,0 +1,25 @@
+{
+    "id": "8FA18096",
+    "path": "~/R/KAGGLE_TITANIC/titanic_kaggle_competition.R",
+    "project_path": "titanic_kaggle_competition.R",
+    "type": "r_source",
+    "hash": "2278828614",
+    "contents": "",
+    "dirty": false,
+    "created": 1609689797102.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "tempName": "Untitled1",
+        "cursorPosition": "163,0",
+        "scrollLine": "136"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1609698142,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1609698142165,
+    "read_only": false,
+    "read_only_alternatives": []
+}
