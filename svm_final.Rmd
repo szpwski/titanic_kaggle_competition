@@ -1,0 +1,280 @@
+---
+title: "SVM Prediction - Titanic Competition"
+author: "Szymon Pawłowski"
+date: "4 01 2021"
+output: 
+  pdf_document: 
+    keep_tex: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Kaggle Titanic Competition
+It is one of the first challenges every ML beginner should dive in. In this competition the main goal is to predict which passengers survived the Titanic shipwreck using given data and creating a ML model. Here the SVM is used for prediction. In another file on GitHub "titanic_kaggle_competition.R" a whole work containing many approaches can be found.
+
+## The data
+The data has been split into two groups: training set and test set. Columns they contain:
+* Survival - did passenger survive - 0=no, 1=yes
+* Pclass - ticket class - 1=1st, 2=2nd, 3=3rd
+* Name 
+* Sex - sex - m/f 
+* Age - age in years
+* Sibsp - number of siblings / spouses aboard the Titanic 
+* Parch - number of parents / children aboard the Titanic 
+* Ticket - ticket number 
+* Fare - passenger fare
+* Cabin - cabin number 
+* Embarked - port of embarkation - C=Cherbourg, Q=Quennstown, S=Southampton 
+
+## Libraries
+
+
+```{r libraries}
+library(e1071)
+library(ggplot2)
+library(GGally)
+library(fitdistrplus)
+```
+
+## Loading data
+
+```{r loading}
+df_t <- read.csv("test.csv")
+df <- read.csv("train.csv")
+
+```
+
+## First look at data
+
+```{r first look}
+head(df)
+tail(df)
+summary(df)
+
+```
+* Survival - need to transfer into factor
+* Pclass - seems okay
+* Name - could extract title from it
+* Sex - need to transfer into numeric factor
+* Age - contains missing values, need to replace them
+* Sibsp and Parch - can get information of family size from here
+* Ticket and Cabin - hard to get information so we will drop it for now
+* Fare - seems okay, some NA's
+* Embarked - need to transfer into numeric factor
+
+# Feature Engineering 
+
+## Age
+Finding the proper distribution.
+```{r fage, ECHO=FALSE}
+age<-df[is.na(df$Age)==FALSE, ]$Age
+age_t<-df_t[is.na(df_t$Age)==FALSE, ]$Age
+
+descdist(age,discrete=FALSE,boot=1000) 
+```
+Looks like Normal, Lognormal or Gamma distribution but Weibull will also be checked.
+```{r fage1}
+fln<-fitdist(age,"lnorm")
+fn<-fitdist(age,"norm")
+fw<-fitdist(age,"weibull")
+fg<-fitdist(age,"gamma")
+plot.legenda<-c("Lognormal","Normal","Weibull","Gamma")
+```
+Plotting the density.
+```{r fage2, echo=FALSE}
+denscomp(list(fln,fn,fw,fg),legendtext=plot.legenda)
+```
+Plotting the Q-Q plot.
+```{r fage3, echo=FALSE}
+qqcomp(list(fln,fn,fw,fg),legendtext=plot.legenda)
+```
+Plotting the cumulative distributant plot.
+```{r fage4, echo=FALSE}
+cdfcomp(list(fln,fn,fw,fg),legendtext=plot.legenda)
+```
+Looking at information criteria.
+```{r fage5}
+dists <- data.frame("Normal"=c(fn$loglik,fn$aic),"Gamma"=c(fg$loglik, fg$aic),
+                       "Weibull"=c(fw$loglik,fw$aic), "Lognormal"=c(fln$loglik,fln$aic),
+                       row.names = c("Loglikelihood","AIC"))
+dists
+```
+Depending on the results we assume that age is normally distributed
+Now, we will generate from this distribution random number in the place of NA's.
+```{r fage6}
+summary(df$Age) #177 NA's
+set.seed(1)
+df[is.na(df$Age)==TRUE, ]$Age <- round(rnorm(177, mean(age),sd(age)))
+
+summary(df_t$Age) #86 NA's
+df_t[is.na(df_t$Age)==TRUE, ]$Age <- round(rnorm(86, mean(age_t),sd(age_t)))
+df_t$Age <- round(df_t$Age)
+```
+
+## Sex
+```{r fsex}
+
+df[df$Sex=="male","Sex"]<-0
+df[df$Sex=="female","Sex"]<-1
+df$Sex<-as.numeric(df$Sex)
+
+df_t[df_t$Sex=="male","Sex"]<-0
+df_t[df_t$Sex=="female","Sex"]<-1
+df_t$Sex<-as.numeric(df_t$Sex)
+```
+
+## Ticket and Cabin
+
+```{r ftc}
+df$Cabin<-NULL
+df$Ticket<-NULL
+
+df_t$Cabin<-NULL
+df_t$Ticket<-NULL
+```
+
+## Name
+
+```{r fn}
+df["Title"]<-sub("\\s.*","",sub(".*,\\s","",df$Name))
+df["Title"]<-factor(df$Title)
+meaning<-unique(df$Title)
+df$Title<-as.numeric(df$Title)
+numeric<-unique(df$Title)
+meaning <- data.frame(numeric=numeric, meaning=meaning)
+t(meaning)
+df[df$Title!=9 & df$Title!=12 & df$Title!=13 & df$Title!=14,]$Title <-4
+df[df$Title==12,]$Title <- 1
+df[df$Title==13,]$Title <- 2
+df[df$Title==9 | df$Title==14,]$Title <- 3
+
+
+df_t["Title"]<-sub("\\s.*","",sub(".*,\\s","",df_t$Name))
+df_t["Title"]<-factor(df_t$Title)
+meaning_t<-unique(df_t$Title)
+df_t$Title<-as.numeric(df_t$Title)
+numeric_t<-unique(df_t$Title)
+meaning_t <- data.frame(numeric=numeric_t, meaning=meaning_t)
+t(meaning_t)
+df_t[df_t$Title!=6 & df_t$Title!=7& df_t$Title!=5& df_t$Title!=8,]$Title <-4
+df_t[df_t$Title==6,]$Title <- 1
+df_t[df_t$Title==7,]$Title <- 2
+df_t[df_t$Title==5 | df_t$Title==8,]$Title <- 3
+
+df$Name <- NULL
+df_t$Name <- NULL
+
+```
+
+## Embarked
+```{r fe}
+df[df$Embarked=="C",]$Embarked <- 1
+df[df$Embarked=="Q",]$Embarked <- 2
+df[df$Embarked=="S",]$Embarked <- 3
+df$Embarked<-as.numeric(df$Embarked)
+
+df_t[df_t$Embarked=="C",]$Embarked <- 1
+df_t[df_t$Embarked=="Q",]$Embarked <- 2
+df_t[df_t$Embarked=="S",]$Embarked <- 3
+df_t$Embarked<-as.numeric(df_t$Embarked)
+```
+
+We got 2 NA's, will replace them with random number
+```{r fe2}
+
+df[is.na(df$Embarked)==TRUE,]$Embarked <- sample(c(1,2,3),2)
+summary(df)
+```
+
+## Fare
+Getting rid off NA in Fare test data
+```{r ff}
+summary(df_t)
+fare <- df_t[is.na(df_t$Fare)==FALSE,]$Fare
+df_t[is.na(df_t$Fare)==TRUE,]$Fare<-rnorm(1,mean(fare),sd(fare))
+```
+
+## Family Size
+```{r ffs}
+df["Fsize"]<-df$Parch + df$SibSp + 1
+df_t["Fsize"] <- df_t$Parch + df_t$SibSp +1
+```
+
+# Exploratory Data Analysis (EDA)
+Creating correlogram to see relationships between features.
+```{r eda1, echo=FALSE}
+df$Survived<-as.factor(df$Survived)
+ggpairs(df,columns=c(1,3:11),ggplot2::aes(colour=Survived))
+```
+
+## Pclass
+```{r edap, echo=FALSE}
+ggplot(df, aes(x=Pclass, fill=Survived)) + geom_histogram(stat="count")
+```
+We see that in the 1st class there were more survivors and in the 3rd class the number of non-survivors is relatively high comparing to the number of survivors.
+
+
+## Sex
+```{r edas, echo=FALSE}
+ggplot(df, aes(x=Sex, fill=Survived)) + geom_histogram(stat="count")
+```
+Most of the survivors were females. This is a well-known fact that women with children are in the first place to be saved.
+
+## Age
+```{r edaa, echo=FALSE}
+ggplot(df, aes(x=Age, fill=Survived)) + geom_density(alpha=0.5)
+```
+Most people who did survive were kids and adults, while the rest were mostly young adults and in the elderly age.
+
+## Fare
+```{r edaf, echo=FALSE}
+ggplot(df, aes(x=Fare, fill=Survived)) + geom_density(alpha=0.5)
+```
+The less is the charge the less survivors. It might be caused with a fact that well paid cabins could be more durable or be placed closer to rescue boats.
+
+## Embarked
+```{r edae, echo=FALSE}
+ggplot(df, aes(x=Embarked, fill=Survived)) + geom_histogram(stat="count")
+```
+The are more survivors in Cherbourg but less in Queenstown or Southampton. Let's see if there is some relationship with Fares.
+```{r edae2, echo=FALSE}
+ggplot(df,aes(x=Fare,fill=factor(Embarked))) + geom_density(alpha=0.5)
+```
+As we can see in Queenstown or Southampton most Fares are in the low interval while in the Cherbourg we may notice that Fares were aswell low as high so the reason standing behind more survivors in Cherbourg are probably better paid cabins.
+
+## Title
+```{r edat, echo=FALSE}
+ggplot(df, aes(x=Title, fill=Survived)) + geom_histogram(stat="count")
+```
+We see that most of the non-survivors were title Mr. while survivors - Ms. or Mrs..
+
+## Fsize
+```{r edafs, echo=FALSE}
+ggplot(df, aes(x=Fsize, fill=Survived)) + geom_histogram(stat="count")
+```
+In the families of size 2-4 there were more survivors and in the families of size 1 or 5 and more there were more non-survivors. Most families of size 2-4 consists of married couples and children and as we said, they were a priority to be saved.
+
+# Creating SVM model
+Now we will perform SVM using radial kernel and choosing best parameters with tune().
+```{r model1}
+tune.out<-tune(svm, Survived~Pclass+Sex+Fare+Embarked+Title+Age+Fsize, data=df,
+               kernel="radial", range = list(cost=c(0.1,1,10,100,1000)
+                                             ,gamma=c(0.5,1,2,3,4)))
+summary(tune.out)
+svm_fit<-tune.out$best.model
+```
+Checking training error rates.
+```{r model2}
+table(svm_fit$fitted,df$Survived)
+```
+Making final prediction and saving result into data frame.
+```{r model3}
+prediction=predict(svm_fit,df_t)
+svm_p<-data.frame(PassengerId=892:1309, Survived=prediction) 
+```
+Writing into .csv file ready for a submission on Kaggle.
+```{r model4}
+write.csv(svm_p,file="svm_prediction.csv", row.names=F)
+```
+
