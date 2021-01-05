@@ -52,6 +52,7 @@ head(df)
 tail(df)
 summary(df)
 
+df$Survived <- factor(df$Survived)
 ```
 * Survival - need to transfer into factor
 * Pclass - seems okay
@@ -63,6 +64,42 @@ summary(df)
 * Fare - seems okay, some NA's
 * Embarked - need to transfer into numeric factor
 
+# Exploratory Data Analysis (EDA)
+
+## Pclass
+```{r edap, echo=FALSE}
+ggplot(df, aes(x=Pclass, fill=Survived)) + geom_histogram(stat="count")
+```
+We see that in the 1st class there were more survivors and in the 3rd class the number of non-survivors is relatively high comparing to the number of survivors.
+
+
+## Sex
+```{r edas, echo=FALSE}
+ggplot(df, aes(x=Sex, fill=Survived)) + geom_histogram(stat="count")
+```
+Most of the survivors were females. This is a well-known fact that women with children are in the first place to be saved.
+
+## Age
+```{r edaa, echo=FALSE}
+ggplot(df, aes(x=Age, fill=Survived)) + geom_density(alpha=0.5)
+```
+Most people who did survive were kids and adults, while the rest were mostly young adults and in the elderly age.
+
+## Fare
+```{r edaf, echo=FALSE}
+ggplot(df, aes(x=Fare, fill=Survived)) + geom_density(alpha=0.5)
+```
+The less is the charge the less survivors. It might be caused with a fact that well paid cabins could be more durable or be placed closer to rescue boats.
+
+## Embarked
+```{r edae, echo=FALSE}
+ggplot(df, aes(x=Embarked, fill=Survived)) + geom_histogram(stat="count")
+```
+The are more survivors in Cherbourg but less in Queenstown or Southampton. Let's see if there is some relationship with Fares.
+```{r edae2, echo=FALSE}
+ggplot(df,aes(x=Fare,fill=factor(Embarked))) + geom_density(alpha=0.5)
+```
+As we can see in Queenstown or Southampton most Fares are in the low interval while in the Cherbourg we may notice that Fares were aswell low as high so the reason standing behind more survivors in Cherbourg are probably better paid cabins.
 # Feature Engineering 
 
 ## Age
@@ -110,16 +147,26 @@ df[is.na(df$Age)==TRUE, ]$Age <- round(rnorm(177, mean(age),sd(age)))
 summary(df_t$Age) #86 NA's
 df_t[is.na(df_t$Age)==TRUE, ]$Age <- round(rnorm(86, mean(age_t),sd(age_t)))
 df_t$Age <- round(df_t$Age)
+
+df["AgeBin"]<-NA
+df[df$Age < 18,]$AgeBin <- (-1) #kid
+df[df$Age >=18 & df$Age<50,]$AgeBin <- 0 #adult
+df[df$Age>=50,]$AgeBin <- 1 #elderly
+
+df_t["AgeBin"]<-NA
+df_t[df_t$Age < 18,]$AgeBin <- (-1) #kid
+df_t[df_t$Age >=18 & df_t$Age<50,]$AgeBin <- 0 #adult
+df_t[df_t$Age>=50,]$AgeBin <- 1 #elderly
+
 ```
 
 ## Sex
 ```{r fsex}
-
-df[df$Sex=="male","Sex"]<-0
+df[df$Sex=="male","Sex"]<-(-1)
 df[df$Sex=="female","Sex"]<-1
 df$Sex<-as.numeric(df$Sex)
 
-df_t[df_t$Sex=="male","Sex"]<-0
+df_t[df_t$Sex=="male","Sex"]<-(-1)
 df_t[df_t$Sex=="female","Sex"]<-1
 df_t$Sex<-as.numeric(df_t$Sex)
 ```
@@ -144,10 +191,10 @@ df$Title<-as.numeric(df$Title)
 numeric<-unique(df$Title)
 meaning <- data.frame(numeric=numeric, meaning=meaning)
 t(meaning)
-df[df$Title!=9 & df$Title!=12 & df$Title!=13 & df$Title!=14,]$Title <-4
-df[df$Title==12,]$Title <- 1
-df[df$Title==13,]$Title <- 2
-df[df$Title==9 | df$Title==14,]$Title <- 3
+df[df$Title!=9 & df$Title!=12 & df$Title!=13 & df$Title!=14,]$Title <-1 #Other
+df[df$Title==12,]$Title <- (-1) #Mr
+df[df$Title==13,]$Title <- (-0.5) #Mrs
+df[df$Title==9 | df$Title==14,]$Title <- 0.5 #Miss/Ms
 
 
 df_t["Title"]<-sub("\\s.*","",sub(".*,\\s","",df_t$Name))
@@ -157,27 +204,32 @@ df_t$Title<-as.numeric(df_t$Title)
 numeric_t<-unique(df_t$Title)
 meaning_t <- data.frame(numeric=numeric_t, meaning=meaning_t)
 t(meaning_t)
-df_t[df_t$Title!=6 & df_t$Title!=7& df_t$Title!=5& df_t$Title!=8,]$Title <-4
-df_t[df_t$Title==6,]$Title <- 1
-df_t[df_t$Title==7,]$Title <- 2
-df_t[df_t$Title==5 | df_t$Title==8,]$Title <- 3
+df_t[df_t$Title!=6 & df_t$Title!=7& df_t$Title!=5& df_t$Title!=8,]$Title <-1
+df_t[df_t$Title==6,]$Title <- (-1)
+df_t[df_t$Title==7,]$Title <- (-0.5)
+df_t[df_t$Title==5 | df_t$Title==8,]$Title <- 0.5
 
 df$Name <- NULL
 df_t$Name <- NULL
 
 ```
+```{r edat, echo=FALSE}
+ggplot(df, aes(x=Title, fill=Survived)) + geom_histogram(stat="count")
+```
+We see that most of the non-survivors were title Mr. while survivors - Ms. or Mrs..
 
 ## Embarked
 ```{r fe}
-df[df$Embarked=="C",]$Embarked <- 1
-df[df$Embarked=="Q",]$Embarked <- 2
-df[df$Embarked=="S",]$Embarked <- 3
+df[df$Embarked=="C",]$Embarked <- (-1)
+df[df$Embarked=="Q",]$Embarked <- 0
+df[df$Embarked=="S",]$Embarked <- 1
 df$Embarked<-as.numeric(df$Embarked)
 
-df_t[df_t$Embarked=="C",]$Embarked <- 1
-df_t[df_t$Embarked=="Q",]$Embarked <- 2
-df_t[df_t$Embarked=="S",]$Embarked <- 3
+df_t[df_t$Embarked=="C",]$Embarked <- (-1)
+df_t[df_t$Embarked=="Q",]$Embarked <- 0
+df_t[df_t$Embarked=="S",]$Embarked <- 1
 df_t$Embarked<-as.numeric(df_t$Embarked)
+summary(df)
 ```
 
 We got 2 NA's, will replace them with random number
@@ -200,67 +252,38 @@ df_t[is.na(df_t$Fare)==TRUE,]$Fare<-rnorm(1,mean(fare),sd(fare))
 df["Fsize"]<-df$Parch + df$SibSp + 1
 df_t["Fsize"] <- df_t$Parch + df_t$SibSp +1
 ```
-
-# Exploratory Data Analysis (EDA)
-Creating correlogram to see relationships between features.
-```{r eda1, echo=FALSE}
-df$Survived<-as.factor(df$Survived)
-ggpairs(df,columns=c(1,3:11),ggplot2::aes(colour=Survived))
-```
-
-## Pclass
-```{r edap, echo=FALSE}
-ggplot(df, aes(x=Pclass, fill=Survived)) + geom_histogram(stat="count")
-```
-We see that in the 1st class there were more survivors and in the 3rd class the number of non-survivors is relatively high comparing to the number of survivors.
-
-
-## Sex
-```{r edas, echo=FALSE}
-ggplot(df, aes(x=Sex, fill=Survived)) + geom_histogram(stat="count")
-```
-Most of the survivors were females. This is a well-known fact that women with children are in the first place to be saved.
-
-## Age
-```{r edaa, echo=FALSE}
-ggplot(df, aes(x=Age, fill=Survived)) + geom_density(alpha=0.5)
-```
-Most people who did survive were kids and adults, while the rest were mostly young adults and in the elderly age.
-
-## Fare
-```{r edaf, echo=FALSE}
-ggplot(df, aes(x=Fare, fill=Survived)) + geom_density(alpha=0.5)
-```
-The less is the charge the less survivors. It might be caused with a fact that well paid cabins could be more durable or be placed closer to rescue boats.
-
-## Embarked
-```{r edae, echo=FALSE}
-ggplot(df, aes(x=Embarked, fill=Survived)) + geom_histogram(stat="count")
-```
-The are more survivors in Cherbourg but less in Queenstown or Southampton. Let's see if there is some relationship with Fares.
-```{r edae2, echo=FALSE}
-ggplot(df,aes(x=Fare,fill=factor(Embarked))) + geom_density(alpha=0.5)
-```
-As we can see in Queenstown or Southampton most Fares are in the low interval while in the Cherbourg we may notice that Fares were aswell low as high so the reason standing behind more survivors in Cherbourg are probably better paid cabins.
-
-## Title
-```{r edat, echo=FALSE}
-ggplot(df, aes(x=Title, fill=Survived)) + geom_histogram(stat="count")
-```
-We see that most of the non-survivors were title Mr. while survivors - Ms. or Mrs..
-
-## Fsize
 ```{r edafs, echo=FALSE}
 ggplot(df, aes(x=Fsize, fill=Survived)) + geom_histogram(stat="count")
 ```
 In the families of size 2-4 there were more survivors and in the families of size 1 or 5 and more there were more non-survivors. Most families of size 2-4 consists of married couples and children and as we said, they were a priority to be saved.
 
+```{r ffs2}
+df[df$Fsize==1,]$Fsize <- (-1) #single
+df[df$Fsize>1 & df$Fsize<5,]$Fsize <- 0 #family
+df[df$Fsize>=5,]$Fsize <- 1 #large family
+
+df_t[df_t$Fsize==1,]$Fsize <- (-1) #single
+df_t[df_t$Fsize>1 & df_t$Fsize<5,]$Fsize <- 0 #family
+df_t[df_t$Fsize>=5,]$Fsize <- 1 #large family
+
+```
+
+```{r edafs2, echo=FALSE}
+ggplot(df, aes(x=Fsize, fill=Survived)) + geom_histogram(stat="count")
+```
+
+Creating correlogram to see relationships between features.
+```{r eda1, echo=FALSE}
+df$Survived<-as.factor(df$Survived)
+ggpairs(df,columns=c(1,3:11),ggplot2::aes(colour=Survived))
+```
 # Creating SVM model
 Now we will perform SVM using radial kernel and choosing best parameters with tune().
 ```{r model1}
 tune.out<-tune(svm, Survived~Pclass+Sex+Fare+Embarked+Title+Age+Fsize, data=df,
-               kernel="radial", range = list(cost=c(0.1,1,10,100,1000)
-                                             ,gamma=c(0.5,1,2,3,4)))
+               kernel="radial",type="C-classification", 
+               range = list(cost=10^(-2:2),gamma=10^(-5:5)))
+
 summary(tune.out)
 svm_fit<-tune.out$best.model
 ```
@@ -271,6 +294,7 @@ table(svm_fit$fitted,df$Survived)
 Making final prediction and saving result into data frame.
 ```{r model3}
 prediction=predict(svm_fit,df_t)
+
 svm_p<-data.frame(PassengerId=892:1309, Survived=prediction) 
 ```
 Writing into .csv file ready for a submission on Kaggle.

@@ -508,3 +508,276 @@ pred.te=predict(out,df_t)
 results3<-data.frame(PassengerId=892:1309, Survived=pred.te) #first submission
 
 write.csv(results3,file="svm_results3.csv", row.names=F) #got 76.79% prediction score on Kaggle
+
+
+
+#----------------------- NEW APPROACH -----------
+## Loading data
+df_t <- read.csv("test.csv")
+df <- read.csv("train.csv")
+
+
+## First look at data
+
+head(df)
+tail(df)
+summary(df)
+
+#* Survival - need to transfer into factor
+#* Pclass - seems okay
+#* Name - could extract title from it
+#* Sex - need to transfer into numeric factor
+#* Age - contains missing values, need to replace them
+#* Sibsp and Parch - can get information of family size from here
+#* Ticket and Cabin - hard to get information so we will drop it for now
+#* Fare - seems okay, some NA's
+#* Embarked - need to transfer into numeric factor
+
+# Feature Engineering 
+
+## Age
+#Finding the proper distribution.
+
+age<-df[is.na(df$Age)==FALSE, ]$Age
+age_t<-df_t[is.na(df_t$Age)==FALSE, ]$Age
+
+descdist(age,discrete=FALSE,boot=1000) 
+
+#Looks like Normal, Lognormal or Gamma distribution but Weibull will also be checked.
+fln<-fitdist(age,"lnorm")
+fn<-fitdist(age,"norm")
+fw<-fitdist(age,"weibull")
+fg<-fitdist(age,"gamma")
+plot.legenda<-c("Lognormal","Normal","Weibull","Gamma")
+
+#Plotting the density.
+denscomp(list(fln,fn,fw,fg),legendtext=plot.legenda)
+
+#Plotting the Q-Q plot.
+qqcomp(list(fln,fn,fw,fg),legendtext=plot.legenda)
+
+#Plotting the cumulative distributant plot.
+cdfcomp(list(fln,fn,fw,fg),legendtext=plot.legenda)
+
+#Looking at information criteria.
+dists <- data.frame("Normal"=c(fn$loglik,fn$aic),"Gamma"=c(fg$loglik, fg$aic),
+                    "Weibull"=c(fw$loglik,fw$aic), "Lognormal"=c(fln$loglik,fln$aic),
+                    row.names = c("Loglikelihood","AIC"))
+dists
+#Depending on the results we assume that age is normally distributed
+#Now, we will generate from this distribution random number in the place of NA's.
+summary(df$Age) #177 NA's
+set.seed(1)
+df[is.na(df$Age)==TRUE, ]$Age <- round(rnorm(177, mean(age),sd(age)))
+
+summary(df_t$Age) #86 NA's
+df_t[is.na(df_t$Age)==TRUE, ]$Age <- round(rnorm(86, mean(age_t),sd(age_t)))
+df_t$Age <- round(df_t$Age)
+
+## Sex
+df[df$Sex=="male","Sex"]<-(-1)
+df[df$Sex=="female","Sex"]<-1
+df$Sex<-as.numeric(df$Sex)
+
+df_t[df_t$Sex=="male","Sex"]<-(-1)
+df_t[df_t$Sex=="female","Sex"]<-1
+df_t$Sex<-as.numeric(df_t$Sex)
+
+## Ticket and Cabin
+df$Cabin<-NULL
+df$Ticket<-NULL
+
+df_t$Cabin<-NULL
+df_t$Ticket<-NULL
+
+## Name
+df["Title"]<-sub("\\s.*","",sub(".*,\\s","",df$Name))
+df["Title"]<-factor(df$Title)
+meaning<-unique(df$Title)
+df$Title<-as.numeric(df$Title)
+numeric<-unique(df$Title)
+meaning <- data.frame(numeric=numeric, meaning=meaning)
+t(meaning)
+df[df$Title!=9 & df$Title!=12 & df$Title!=13 & df$Title!=14,]$Title <-1 #Other
+df[df$Title==12,]$Title <- (-1) #Mr
+df[df$Title==13,]$Title <- (-0.5) #Mrs
+df[df$Title==9 | df$Title==14,]$Title <- 0.5 #Miss/Ms
+
+
+df_t["Title"]<-sub("\\s.*","",sub(".*,\\s","",df_t$Name))
+df_t["Title"]<-factor(df_t$Title)
+meaning_t<-unique(df_t$Title)
+df_t$Title<-as.numeric(df_t$Title)
+numeric_t<-unique(df_t$Title)
+meaning_t <- data.frame(numeric=numeric_t, meaning=meaning_t)
+t(meaning_t)
+df_t[df_t$Title!=6 & df_t$Title!=7& df_t$Title!=5& df_t$Title!=8,]$Title <-1
+df_t[df_t$Title==6,]$Title <- (-1)
+df_t[df_t$Title==7,]$Title <- (-0.5)
+df_t[df_t$Title==5 | df_t$Title==8,]$Title <- 0.5
+
+df$Name <- NULL
+df_t$Name <- NULL
+
+
+## Embarked
+df[df$Embarked=="C",]$Embarked <- (-1)
+df[df$Embarked=="Q",]$Embarked <- 0
+df[df$Embarked=="S",]$Embarked <- 1
+df$Embarked<-as.numeric(df$Embarked)
+
+df_t[df_t$Embarked=="C",]$Embarked <- (-1)
+df_t[df_t$Embarked=="Q",]$Embarked <- 0
+df_t[df_t$Embarked=="S",]$Embarked <- 1
+df_t$Embarked<-as.numeric(df_t$Embarked)
+summary(df)
+
+#We got 2 NA's, will replace them with random number
+
+df[is.na(df$Embarked)==TRUE,]$Embarked <- sample(c(1,2,3),2)
+summary(df)
+
+## Fare
+#Getting rid off NA in Fare test data
+summary(df_t)
+fare <- df_t[is.na(df_t$Fare)==FALSE,]$Fare
+df_t[is.na(df_t$Fare)==TRUE,]$Fare<-rnorm(1,mean(fare),sd(fare))
+
+## Family Size
+df["Fsize"]<-df$Parch + df$SibSp + 1
+df_t["Fsize"] <- df_t$Parch + df_t$SibSp +1
+df[df$Fsize==1,]$Fsize <- (-1) #single
+df[df$Fsize>1 & df$Fsize<5,]$Fsize <- 0 #family
+df[df$Fsize>=5,]$Fsize <- 1 #large family
+
+df_t[df_t$Fsize==1,]$Fsize <- (-1) #single
+df_t[df_t$Fsize>1 & df_t$Fsize<5,]$Fsize <- 0 #family
+df_t[df_t$Fsize>=5,]$Fsize <- 1 #large family
+
+#Factorize Survived
+df$Survived <- factor(df$Survived)
+
+# Exploratory Data Analysis (EDA)
+#Creating correlogram to see relationships between features.
+df$Survived<-as.factor(df$Survived)
+ggpairs(df,columns=c(1,3:11),ggplot2::aes(colour=Survived))
+
+## Pclass
+ggplot(df, aes(x=Pclass, fill=Survived)) + geom_histogram(stat="count")
+#We see that in the 1st class there were more survivors and in the 3rd class the number of non-survivors is relatively high comparing to the number of survivors.
+
+
+## Sex
+ggplot(df, aes(x=Sex, fill=Survived)) + geom_histogram(stat="count")
+#Most of the survivors were females. This is a well-known fact that women with children are in the first place to be saved.
+
+## Age
+ggplot(df, aes(x=Age, fill=Survived)) + geom_density(alpha=0.5)
+#Most people who did survive were kids and adults, while the rest were mostly young adults and in the elderly age.
+
+## Fare
+ggplot(df, aes(x=Fare, fill=Survived)) + geom_density(alpha=0.5)
+#The less is the charge the less survivors. It might be caused with a fact that well paid cabins could be more durable or be placed closer to rescue boats.
+
+## Embarked
+ggplot(df, aes(x=Embarked, fill=Survived)) + geom_histogram(stat="count")
+#The are more survivors in Cherbourg but less in Queenstown or Southampton. Let's see if there is some relationship with Fares.
+ggplot(df,aes(x=Fare,fill=factor(Embarked))) + geom_density(alpha=0.5)
+#As we can see in Queenstown or Southampton most Fares are in the low interval while in the Cherbourg we may notice that Fares were aswell low as high so the reason standing behind more survivors in Cherbourg are probably better paid cabins.
+
+## Title
+ggplot(df, aes(x=Title, fill=Survived)) + geom_histogram(stat="count")
+#We see that most of the non-survivors were title Mr. while survivors - Ms. or Mrs..
+
+## Fsize
+ggplot(df, aes(x=Fsize, fill=Survived)) + geom_histogram(stat="count")
+#In the families of size 2-4 there were more survivors and in the families of size 1 or 5 and more there were more non-survivors. Most families of size 2-4 consists of married couples and children and as we said, they were a priority to be saved.
+
+# Creating SVM model
+#Now we will perform SVM using radial kernel and choosing best parameters with tune().
+tune.out<-tune(svm, Survived~Pclass+Sex+Fare+Embarked+Title+Age+Fsize, data=df,
+               kernel="radial",type="C-classification", 
+               range = list(cost=10^(-2:2),gamma=10^(-5:5)))
+
+
+summary(tune.out)
+svm_fit<-tune.out$best.model
+
+#Checking training error rates.
+table(svm_fit$fitted,df$Survived)
+
+#Making final prediction and saving result into data frame.
+prediction=predict(svm_fit,df_t)
+svm_p<-data.frame(PassengerId=892:1309, Survived=prediction) 
+
+
+#Writing into .csv file ready for a submission on Kaggle.
+write.csv(svm_p,file="svm_prediction.csv", row.names=F)
+
+
+
+#--------SEEKING FOR IMPROVEMENTS-------------
+#splitting train data  df2 into train and test using 10-fold cross validation
+#randomly shuffle the data
+td<-df[sample(nrow(df)),]
+
+#Create 10 equally size folds
+folds <- cut(seq(1,nrow(td)),breaks=10,labels=FALSE)
+
+#Perform 10 fold cross validation
+for(i in 1:10){
+  #Segement your data by fold using the which() function 
+  testIndexes <- which(folds==i,arr.ind=TRUE)
+  td.test <- td[testIndexes, ]
+  td.train <- td[-testIndexes, ]
+  #Use the test and train data partitions however you desire...
+}
+mod<-tune(svm, Survived~Pclass+Sex+Fare+Embarked+Title+Age+Fsize, data=td.train,
+               kernel="radial",type="C-classification", 
+               range = list(cost=10^(-2:2),gamma=10^(-5:5)))
+mod1<-mod$best.model
+p=predict(mod1,td.test)
+w<-table(p,td.test$Survived)
+1-(w[2,1]+w[1,2])/sum(w)
+
+#Adding Age bins
+df["AgeBin"]<-NA
+df[df$Age < 18,]$AgeBin <- (-1) #kid
+df[df$Age >=18 & df$Age<50,]$AgeBin <- 0 #adult
+df[df$Age>=50,]$AgeBin <- 1 #elderly
+
+df_t["AgeBin"]<-NA
+df_t[df_t$Age < 18,]$AgeBin <- (-1) #kid
+df_t[df_t$Age >=18 & df_t$Age<50,]$AgeBin <- 0 #adult
+df_t[df_t$Age>=50,]$AgeBin <- 1 #elderly
+
+
+mod<-tune(svm, Survived~Pclass+Sex+Fare+Embarked+AgeBin+Fsize, data=td.train,
+          kernel="radial",type="C-classification", 
+          range = list(cost=10^(-2:2),gamma=10^(-5:5)))
+mod1<-mod$best.model
+p=predict(mod1,td.test)
+w<-table(p,td.test$Survived)
+1-(w[2,1]+w[1,2])/sum(w)
+
+#Seeing if improves
+tune.out2<-tune(svm, Survived~Pclass+Sex+Fare+Embarked+Title+AgeBin+Fsize, data=df,
+               kernel="radial",type="C-classification", 
+               range = list(cost=10^(-2:2),gamma=10^(-5:5)))
+
+
+summary(tune.out2)
+svm_fit2<-tune.out2$best.model
+
+#Checking training error rates.
+table(svm_fit2$fitted,df$Survived)
+
+#Making final prediction and saving result into data frame.
+prediction2=predict(svm_fit2,df_t)
+svm_p2<-data.frame(PassengerId=892:1309, Survived=prediction2) 
+
+
+#Writing into .csv file ready for a submission on Kaggle.
+write.csv(svm_p2,file="svm_prediction2.csv", row.names=F)
+
+
