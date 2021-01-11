@@ -83,7 +83,7 @@ Most of the survivors were females. This is a well-known fact that women with ch
 ```{r edaa, echo=FALSE}
 ggplot(df, aes(x=Age, fill=Survived)) + geom_density(alpha=0.5)
 ```
-Most people who did survive were kids and adults, while the rest were mostly young adults and in the elderly age.
+Because of the low correlation it is hard to tell something valuable. Most survivors were between age of 20 and 30, similarly the non-survivrors. Later we will try to categorize age and check out if we can get more informations.
 
 ## Fare
 ```{r edaf, echo=FALSE}
