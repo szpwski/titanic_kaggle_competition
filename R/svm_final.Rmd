@@ -103,50 +103,10 @@ As we can see in Queenstown or Southampton most Fares are in the low interval wh
 # Feature Engineering 
 
 ## Age
-Finding the proper distribution.
-```{r fage, ECHO=FALSE}
-age<-df[is.na(df$Age)==FALSE, ]$Age
-age_t<-df_t[is.na(df_t$Age)==FALSE, ]$Age
-
-descdist(age,discrete=FALSE,boot=1000) 
-```
-Looks like Normal, Lognormal or Gamma distribution but Weibull will also be checked.
-```{r fage1}
-fln<-fitdist(age,"lnorm")
-fn<-fitdist(age,"norm")
-fw<-fitdist(age,"weibull")
-fg<-fitdist(age,"gamma")
-plot.legenda<-c("Lognormal","Normal","Weibull","Gamma")
-```
-Plotting the density.
-```{r fage2, echo=FALSE}
-denscomp(list(fln,fn,fw,fg),legendtext=plot.legenda)
-```
-Plotting the Q-Q plot.
-```{r fage3, echo=FALSE}
-qqcomp(list(fln,fn,fw,fg),legendtext=plot.legenda)
-```
-Plotting the cumulative distributant plot.
-```{r fage4, echo=FALSE}
-cdfcomp(list(fln,fn,fw,fg),legendtext=plot.legenda)
-```
-Looking at information criteria.
-```{r fage5}
-dists <- data.frame("Normal"=c(fn$loglik,fn$aic),"Gamma"=c(fg$loglik, fg$aic),
-                       "Weibull"=c(fw$loglik,fw$aic), "Lognormal"=c(fln$loglik,fln$aic),
-                       row.names = c("Loglikelihood","AIC"))
-dists
-```
-Depending on the results we assume that age is normally distributed
-Now, we will generate from this distribution random number in the place of NA's.
-```{r fage6}
-summary(df$Age) #177 NA's
-set.seed(1)
-df[is.na(df$Age)==TRUE, ]$Age <- round(rnorm(177, mean(age),sd(age)))
-
-summary(df_t$Age) #86 NA's
-df_t[is.na(df_t$Age)==TRUE, ]$Age <- round(rnorm(86, mean(age_t),sd(age_t)))
-df_t$Age <- round(df_t$Age)
+Allocating median instead of NAs.
+```{r fage}
+df[is.na(df$Age)==TRUE, ]$Age <- median(df[is.na(df$Age)==FALSE, ]$Age)
+df_t[is.na(df_t$Age)==TRUE, ]$Age <- median(df_t[is.na(df_t$Age)==FALSE, ]$Age)
 
 df["AgeBin"]<-NA
 df[df$Age < 18,]$AgeBin <- (-1) #kid
@@ -157,7 +117,6 @@ df_t["AgeBin"]<-NA
 df_t[df_t$Age < 18,]$AgeBin <- (-1) #kid
 df_t[df_t$Age >=18 & df_t$Age<50,]$AgeBin <- 0 #adult
 df_t[df_t$Age>=50,]$AgeBin <- 1 #elderly
-
 ```
 
 ## Sex
@@ -191,10 +150,9 @@ df$Title<-as.numeric(df$Title)
 numeric<-unique(df$Title)
 meaning <- data.frame(numeric=numeric, meaning=meaning)
 t(meaning)
-df[df$Title!=9 & df$Title!=12 & df$Title!=13 & df$Title!=14,]$Title <-1 #Other
-df[df$Title==12,]$Title <- (-1) #Mr
-df[df$Title==13,]$Title <- (-0.5) #Mrs
-df[df$Title==9 | df$Title==14,]$Title <- 0.5 #Miss/Ms
+df[df$Title!=9 & df$Title!=12 & df$Title!=13 & df$Title!=14,]$Title <-0 #Other
+df[df$Title==12 | df$Title==13,]$Title <- (-1) #Mr, #Mrs
+df[df$Title==9 | df$Title==14,]$Title <- 1 #Miss/Ms
 
 
 df_t["Title"]<-sub("\\s.*","",sub(".*,\\s","",df_t$Name))
@@ -204,10 +162,9 @@ df_t$Title<-as.numeric(df_t$Title)
 numeric_t<-unique(df_t$Title)
 meaning_t <- data.frame(numeric=numeric_t, meaning=meaning_t)
 t(meaning_t)
-df_t[df_t$Title!=6 & df_t$Title!=7& df_t$Title!=5& df_t$Title!=8,]$Title <-1
-df_t[df_t$Title==6,]$Title <- (-1)
-df_t[df_t$Title==7,]$Title <- (-0.5)
-df_t[df_t$Title==5 | df_t$Title==8,]$Title <- 0.5
+df_t[df_t$Title!=6 & df_t$Title!=7& df_t$Title!=5& df_t$Title!=8,]$Title <-0
+df_t[df_t$Title==6 | df_t$Title==7,]$Title <- (-1)
+df_t[df_t$Title==5 | df_t$Title==8,]$Title <- 1
 
 df$Name <- NULL
 df_t$Name <- NULL
