@@ -2,4 +2,7 @@
  
 First competition on Kaggle - Titanic\
 Using SVM to predict the survivors in R and Python\
-https://www.kaggle.com/titanic/overview
+
+Last result from approach written only in Python code got in top 6% (September 2021).
+
+https://www.kaggle.com/titanic/
